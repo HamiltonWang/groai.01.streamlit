@@ -33,4 +33,4 @@ SERVICE = mlflow-tracking
 .PHONY: dashboard
 dashboard:
 	@echo "Running Dashboard..."
-	streamlit run app.py --server.port 8501
+	streamlit run streamlit_app.py --server.port 8501
