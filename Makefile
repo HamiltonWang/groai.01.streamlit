@@ -1,7 +1,4 @@
-# Makefile for managing MLflow server
-
-# Default target (run with just `make`)
-all: restart-mlflow
+# Makefile for GroAI.01 Streamlit Dashboard
 
 # Load .env file
 ifneq (,$(wildcard ./.env))
@@ -9,28 +6,30 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-# Help target to show usage
+.PHONY: help dashboard install clean
+
+# Default target
+all: help
+
 help:
 	@echo "Available targets:"
-	@echo "  make start-mlflow      - Start MLflow server in foreground"
-	@echo "  make stop-mlflow       - Stop any running MLflow servers"
-	@echo "  make restart-mlflow    - Stop and restart MLflow server in foreground"
-	@echo "  make start-background  - Start MLflow server in background (detached)"
-	@echo "  make train             - Run the training script"
-	@echo "  make predict_model     - Run the prediction script"
-	@echo "  make predict_history   - Run the history prediction script"
-	@echo "  make start-api         - Start the prediction API server"
-	@echo "                           Usage: make start-api logged_model='...' HORIZON=6"
-	@echo "  make test-api          - Run integration tests against running API"
-	@echo "  make help              - Show this help"
+	@echo "  make dashboard       - Run the Streamlit dashboard"
+	@echo "  make install         - Create venv and install dependencies"
+	@echo "  make clean           - Remove venv and temporary files"
+	@echo "  make help            - Show this help"
 
-
-# Variables
-PROJECT = GroAI.01
-SERVICE = mlflow-tracking
-
-# Dashboard
-.PHONY: dashboard
+# Run the dashboard
 dashboard:
 	@echo "Running Dashboard..."
-	streamlit run streamlit_app.py --server.port 8501
+	./venv/bin/streamlit run streamlit_app.py --server.port 8501
+
+# Setup environment
+install:
+	python3 -m venv venv
+	./venv/bin/pip install -r requirements.txt
+
+# Clean up
+clean:
+	rm -rf venv
+	find . -type f -name '*.pyc' -delete
+	find . -type d -name '__pycache__' -delete
