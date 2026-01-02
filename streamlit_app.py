@@ -52,6 +52,11 @@ st.markdown("""
         background-color: #f97316;
         box-shadow: 0 4px 15px rgba(234, 88, 12, 0.4);
     }
+    /* Tab Header Styling */
+    button[data-baseweb="tab"] {
+        font-size: 20px;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,6 +82,7 @@ st.markdown("""
 # --- Sidebar Inputs ---
 st.sidebar.image("https://www.aihedge.finance/images/logo/logo2.png", width=150)
 st.sidebar.header("Control Panel")
+analyze_top = st.sidebar.button("Analyze Signal", type="primary", key="top_analyze")
 prompt = st.sidebar.text_input("Signal Prompt", value="bullish momentum", help="Textual context for the LLM analysis")
 
 # Dynamic Feature Loading
@@ -114,22 +120,33 @@ with st.sidebar.expander("History Features (Normalized)", expanded=True):
         min_v, max_v, default_v = 0.0, 1.0, 0.5
         
         if "rsi" in name.lower():
-            min_v, max_v, default_v = 0.0, 1.0, 0.5
+            min_v, max_v, default_v = 0.0, 1.0, 0.05
         elif "ema_10" in name.lower(): # Ratio ~ 1.0
-            min_v, max_v, default_v = 0.8, 1.2, 1.0
+            min_v, max_v, default_v = 0.8, 1.2, 0.96
         elif "ema_50" in name.lower(): # Diff ~ 0.0
-            min_v, max_v, default_v = -0.3, 0.3, 0.0
+            min_v, max_v, default_v = -0.3, 0.3, -0.04
         elif "macd" in name.lower():   # Diff ~ 0.0 (smaller)
-            min_v, max_v, default_v = -0.15, 0.15, 0.0
+            min_v, max_v, default_v = -0.15, 0.15, -0.04
             
         val = st.slider(f"{name}", min_v, max_v, default_v, key=f"hist_{i}")
         feature_values.append(val)
 
 # 2. Technicals Section (Dict for Model)
 tech_data = {}
-with st.sidebar.expander("Model Technicals", expanded=False):
+with st.sidebar.expander("Model Technicals", expanded=True):
     for i, name in enumerate(feature_names_model):
-        val = st.number_input(f"{name}", value=0.0, step=0.01, key=f"tech_{i}")
+        default_val = 0.0
+        # Set defaults based on optimization (Best found return: 0.02926)
+        if "rsi" in name.lower():
+            default_val = 47.70 
+        elif "ema_10" in name.lower():
+            default_val = 0.91
+        elif "ema_50" in name.lower():
+            default_val = -0.09
+        elif "macd" in name.lower(): 
+            default_val = -0.45
+            
+        val = st.number_input(f"{name}", value=default_val, step=0.01, key=f"tech_{i}")
         tech_data[name] = val
 
 # Payload construction
@@ -142,7 +159,9 @@ payload = {
 }
 
 # Analysis Action
-if st.sidebar.button("Analyze Signal", type="primary"):
+analyze_bottom = st.sidebar.button("Analyze Signal", type="primary", key="bottom_analyze")
+
+if analyze_top or analyze_bottom:
     with st.spinner("🧠 Processing Inference..."):
         try:
             response = requests.post(f"{API_URL}/ai/signal_analysis", json=payload, timeout=10.0)
@@ -177,11 +196,11 @@ if st.session_state.analysis_result:
     # Metrics Row
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.metric("LLM Prediction", f"{ret_llm:.4f}", delta=f"{ret_llm*100:.2f}%")
+        st.metric("LLM Prediction", f"{ret_llm*100:.2f}%")
     with c2:
-        st.metric("History Match", f"{ret_history:.4f}", delta=f"{ret_history*100:.2f}%")
+        st.metric("History Match", f"{ret_history*100:.2f}%")
     with c3:
-        st.metric("Model Logic", f"{ret_model:.4f}", delta=f"{ret_model*100:.2f}%")
+        st.metric("Model Logic", f"{ret_model*100:.2f}%")
 
     # Detailed Analysis
     tab1, tab2 = st.tabs(["📊 Performance Comparison", "🤖 AI Insight"])
@@ -192,7 +211,7 @@ if st.session_state.analysis_result:
         plt.style.use('dark_background')
         
         sources = ["LLM", "History", "Model"]
-        values = [ret_llm, ret_history, ret_model]
+        values = [ret_llm * 100, ret_history * 100, ret_model * 100]
         colors = ["#4caf50" if v > 0 else "#f44336" for v in values] # Dynamic colors (Green for positive)
         
         bars = ax.bar(sources, values, color=colors, alpha=0.8, edgecolor='white', linewidth=0.5)
@@ -200,8 +219,16 @@ if st.session_state.analysis_result:
         fig.patch.set_facecolor('#191C29')
         
         ax.set_title("Synthesis of Projected Returns", color='white', pad=20)
-        ax.set_ylabel("Return Intensity", color='white')
+        ax.set_ylabel("Expected Return (%)", color='white')
         ax.axhline(0, color='white', linewidth=1, alpha=0.5)
+        
+        # Explicitly set axis colors to white
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        ax.spines['left'].set_color('white')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('none')
+        ax.spines['right'].set_color('none')
         
         # Gridlines
         ax.yaxis.grid(True, linestyle='--', alpha=0.3)
@@ -210,7 +237,7 @@ if st.session_state.analysis_result:
         # Labels
         for bar in bars:
             height = bar.get_height()
-            ax.annotate(f'{height:.4f}',
+            ax.annotate(f'{height:.2f}%',
                         xy=(bar.get_x() + bar.get_width() / 2, height),
                         xytext=(0, 3 if height >= 0 else -13),
                         textcoords="offset points",
