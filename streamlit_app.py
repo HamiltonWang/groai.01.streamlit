@@ -80,7 +80,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Sidebar Inputs ---
-st.sidebar.image("https://www.aihedge.finance/images/logo/logo2.png", width=150)
+st.sidebar.markdown(
+    '<a href="https://aihedge.finance" target="_blank">'
+    '<img src="https://www.aihedge.finance/images/logo/logo2.png" width="150">'
+    '</a>',
+    unsafe_allow_html=True
+)
 st.sidebar.header("Control Panel")
 analyze_top = st.sidebar.button("Analyze Signal", type="primary", key="top_analyze")
 prompt = st.sidebar.text_input("Signal Prompt", value="bullish momentum", help="Textual context for the LLM analysis")
