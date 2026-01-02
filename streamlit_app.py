@@ -15,7 +15,7 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8080")
 st.set_page_config(
     page_title="GroAI.01 Dashboard",
     page_icon="📈",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="expanded"
 )
 
