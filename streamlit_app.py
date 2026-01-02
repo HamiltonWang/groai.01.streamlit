@@ -1,32 +1,83 @@
 import streamlit as st
 import requests
 import matplotlib.pyplot as plt
-import pandas as pd
+import os
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv() 
+
+# Configuration
+# Updated default port to 8080 to match API server
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8080")
 
 # Page Configuration
 st.set_page_config(
     page_title="GroAI.01 Dashboard",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("GroAI.01 - AI Signal Mapping Dashboard")
+# Custom CSS for Premium Look
 st.markdown("""
-This dashboard simulates LLMA-compatible LLM outputs and visualizes AI-generated expected returns.
-It sends signal prompts and feature vectors to the local GroAI API for analysis.
-""")
+<style>
+    .main {
+        background-color: #191C29;
+    }
+    .stApp {
+        background: radial-gradient(circle at 50% 50%, #1e2235 0%, #191C29 100%);
+    }
+    .css-1d391kg {
+        background-color: #212533;
+    }
+    .stMetric {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        height: 3em;
+        background-color: #EA580C;
+        color: white;
+        font-weight: bold;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background-color: #f97316;
+        box-shadow: 0 4px 15px rgba(234, 88, 12, 0.4);
+    }
+</style>
+""", unsafe_allow_html=True)
 
-import os
+# Helper for safe float conversion
+def safe_float(val, default=0.0):
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
 
-# Configuration
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+# Initialize session state for persistent results
+if "analysis_result" not in st.session_state:
+    st.session_state.analysis_result = None
+
+# --- Header ---
+st.title("🚀 GroAI.01 - AI Signal Mapping")
+st.markdown("""
+<div style="padding: 10px; border-radius: 5px; background: rgba(234, 88, 12, 0.1); border-left: 5px solid #EA580C; margin-bottom: 20px;">
+    <strong>AI-Driven Alpha Generation:</strong> This dashboard visualizes projected returns by synthesizing LLM sentiment, historical pattern matching, and machine learning models.
+</div>
+""", unsafe_allow_html=True)
 
 # --- Sidebar Inputs ---
-st.sidebar.header("AIHedge.finance - AI Signal Mapping Dashboard")
-prompt = st.sidebar.text_input("Prompt", value="bullish momentum")
+st.sidebar.image("https://www.aihedge.finance/images/logo/logo2.png", width=150)
+st.sidebar.header("Control Panel")
+prompt = st.sidebar.text_input("Signal Prompt", value="bullish momentum", help="Textual context for the LLM analysis")
 
 # Dynamic Feature Loading
 feature_names_history = []
@@ -35,132 +86,155 @@ defaults_loaded = False
 
 try:
     # Attempt to fetch feature names from the running API
-    response = requests.get(f"{API_URL}/ai/features", timeout=1.0)
+    response = requests.get(f"{API_URL}/ai/features", timeout=2.0)
     if response.status_code == 200:
         data = response.json()
         feature_names_history = data.get("history_features", [])
         feature_names_model = data.get("model_features", [])
         defaults_loaded = True
-        st.sidebar.success(f"Connected to API. Loaded {len(feature_names_history)} features.")
+        st.sidebar.success(f"✅ Connected: {len(feature_names_history)} features loaded")
     else:
-        st.sidebar.warning(f"API unreachable (Status {response.status_code}). Using fallback defaults.")
-except requests.exceptions.ConnectionError:
-    st.sidebar.error("API connection failed. Is the API server running?")
-    st.sidebar.info("Using fallback/demo feature set.")
-except Exception as e:
-    st.sidebar.error(f"Error fetching features: {e}")
+        st.sidebar.warning(f"⚠️ API status {response.status_code}. Using fallback.")
+except Exception:
+    st.sidebar.error("❌ API Offline. Using demo feature set.")
 
 # Fallback defaults if API not reachable
 if not defaults_loaded or not feature_names_history:
-    # Default 4 features as per original snippet
     feature_names_history = [f"Feature {i+1}" for i in range(4)]
-    # Default common technicals
     feature_names_model = ["ema_10", "ema_50", "rsi", "macd"]
     
-# 1. Feature Vector Section (Inputs for History Prediction)
-st.sidebar.subheader(f"Feature Vector ({len(feature_names_history)} values)")
+# 1. Feature Vector Section (Ordered List for History)
+st.sidebar.subheader("Feature Context")
 feature_values = []
 
-# Use an expander if there are many features to avoid cluttering 
 with st.sidebar.expander("History Features (Normalized)", expanded=True):
+    # Enforce order as per API requirement
     for i, name in enumerate(feature_names_history):
-        # Default to 0.5 (midpoint) or a gradient for demo
-        default_val = 0.1 * (i + 1) if i < 10 else 0.5
-        if default_val > 1.0: default_val = 1.0
+        # Determine slider range and default based on feature type
+        min_v, max_v, default_v = 0.0, 1.0, 0.5
         
-        val = st.slider(f"{name}", 0.0, 1.0, default_val, key=f"hist_{i}")
+        if "rsi" in name.lower():
+            min_v, max_v, default_v = 0.0, 1.0, 0.5
+        elif "ema_10" in name.lower(): # Ratio ~ 1.0
+            min_v, max_v, default_v = 0.8, 1.2, 1.0
+        elif "ema_50" in name.lower(): # Diff ~ 0.0
+            min_v, max_v, default_v = -0.3, 0.3, 0.0
+        elif "macd" in name.lower():   # Diff ~ 0.0 (smaller)
+            min_v, max_v, default_v = -0.15, 0.15, 0.0
+            
+        val = st.slider(f"{name}", min_v, max_v, default_v, key=f"hist_{i}")
         feature_values.append(val)
 
-# 2. Technicals Section (Inputs for Model Prediction)
-st.sidebar.subheader("Technicals (Model Inputs)")
-technicals = {}
-
+# 2. Technicals Section (Dict for Model)
+tech_data = {}
 with st.sidebar.expander("Model Technicals", expanded=False):
     for i, name in enumerate(feature_names_model):
-        # Use number_input for potentially non-normalized values
         val = st.number_input(f"{name}", value=0.0, step=0.01, key=f"tech_{i}")
-        technicals[name] = val
+        tech_data[name] = val
 
 # Payload construction
-# Note: api.py expects 'feature_values' (list) and 'technicals' (dict)
+# History features must be an ordered list
+# Model technicals must be a dictionary
 payload = {
     "prompt": prompt,
     "feature_values": feature_values, 
-    "technicals": technicals
+    "technicals": tech_data
 }
 
-# --- Analysis Action ---
-if st.button("Analyze Signal"):
-    with st.spinner("Processing Inference..."):
+# Analysis Action
+if st.sidebar.button("Analyze Signal", type="primary"):
+    with st.spinner("🧠 Processing Inference..."):
         try:
-            # Send request to API
-            # Note: '/ai/signal_analysis' is the endpoint from api.py
-            response = requests.post(f"{API_URL}/ai/signal_analysis", json=payload)
+            response = requests.post(f"{API_URL}/ai/signal_analysis", json=payload, timeout=10.0)
             
             if response.status_code == 200:
-                result = response.json()
-                st.success("✓ Inference Complete")
-                
-                # --- Display Results ---
-                col1, col2 = st.columns(2)
-                
-                # Column 1: LLM Output
-                with col1:
-                    st.subheader("LLM Output")
-                    llm_out = result.get("llm_output", {})
-                    st.json(llm_out)
-                    
-                    if isinstance(llm_out, dict):
-                        comment = llm_out.get("comment", "")
-                        if comment:
-                             st.markdown(f"**Comment:** {comment}")
-                
-                # Column 2: Quantitative Results
-                with col2:
-                    st.subheader("Expected Returns")
-                    
-                    # Extract values
-                    ret_history = result.get("expected_return_from_history", 0.0)
-                    ret_model = result.get("expected_return_from_model", 0.0)
-                    
-                    # Try to get LLM return if structured
-                    ret_llm = 0.0
-                    if isinstance(llm_out, dict):
-                        ret_llm = float(llm_out.get("expected_return", 0.0))
-                    
-                    st.metric("LLM-Based (Simulated)", ret_llm)
-                    st.metric("History-Based (Stat)", ret_history)
-                    st.metric("Model-Based (ML)", ret_model)
-                
-                # --- Visualization ---
-                st.subheader("Return Comparison")
-                fig, ax = plt.subplots(figsize=(8, 4))
-                
-                sources = ["LLM", "History", "Model"]
-                values = [ret_llm, ret_history, ret_model]
-                colors = ["#4caf50", "#2196f3", "#ff9800"]
-                
-                bars = ax.bar(sources, values, color=colors)
-                ax.set_title("Expected Return Comparison")
-                ax.set_ylabel("Return Value")
-                ax.axhline(0, color='gray', linewidth=0.8) # Zero line
-                
-                # Label values on bars
-                for bar in bars:
-                    height = bar.get_height()
-                    ax.annotate(f'{height:.4f}',
-                                xy=(bar.get_x() + bar.get_width() / 2, height),
-                                xytext=(0, 3),  # 3 points vertical offset
-                                textcoords="offset points",
-                                ha='center', va='bottom')
-
-                st.pyplot(fig)
-                
+                st.session_state.analysis_result = response.json()
+                st.toast("Inference complete!", icon="✅")
             else:
-                st.error(f"Server Error ({response.status_code}):")
-                st.json(response.json()) # Try to show detail
-                
-        except requests.exceptions.ConnectionError:
-            st.error("Failed to connect to API. Is 'make start-api' running?")
+                st.sidebar.error(f"Server Error ({response.status_code})")
+                try:
+                    st.sidebar.json(response.json())
+                except:
+                    st.sidebar.write(response.text[:200])
         except Exception as e:
-            st.error(f"An error occurred: {e}")
+            st.sidebar.error(f"Connection Error: {e}")
+
+# --- Display Results ---
+if st.session_state.analysis_result:
+    result = st.session_state.analysis_result
+    
+    # Extract values safely
+    llm_out = result.get("llm_output", {})
+    ret_history = safe_float(result.get("expected_return_from_history", 0.0))
+    ret_model = safe_float(result.get("expected_return_from_model", 0.0))
+    
+    ret_llm = 0.0
+    llm_comment = ""
+    if isinstance(llm_out, dict):
+        ret_llm = safe_float(llm_out.get("expected_return", 0.0))
+        llm_comment = llm_out.get("comment", "")
+    
+    # Metrics Row
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("LLM Prediction", f"{ret_llm:.4f}", delta=f"{ret_llm*100:.2f}%")
+    with c2:
+        st.metric("History Match", f"{ret_history:.4f}", delta=f"{ret_history*100:.2f}%")
+    with c3:
+        st.metric("Model Logic", f"{ret_model:.4f}", delta=f"{ret_model*100:.2f}%")
+
+    # Detailed Analysis
+    tab1, tab2 = st.tabs(["📊 Performance Comparison", "🤖 AI Insight"])
+    
+    with tab1:
+        st.subheader("Expected Return Distribution")
+        fig, ax = plt.subplots(figsize=(10, 4))
+        plt.style.use('dark_background')
+        
+        sources = ["LLM", "History", "Model"]
+        values = [ret_llm, ret_history, ret_model]
+        colors = ["#4caf50" if v > 0 else "#f44336" for v in values] # Dynamic colors (Green for positive)
+        
+        bars = ax.bar(sources, values, color=colors, alpha=0.8, edgecolor='white', linewidth=0.5)
+        ax.set_facecolor('#191C29')
+        fig.patch.set_facecolor('#191C29')
+        
+        ax.set_title("Synthesis of Projected Returns", color='white', pad=20)
+        ax.set_ylabel("Return Intensity", color='white')
+        ax.axhline(0, color='white', linewidth=1, alpha=0.5)
+        
+        # Gridlines
+        ax.yaxis.grid(True, linestyle='--', alpha=0.3)
+        ax.set_axisbelow(True)
+        
+        # Labels
+        for bar in bars:
+            height = bar.get_height()
+            ax.annotate(f'{height:.4f}',
+                        xy=(bar.get_x() + bar.get_width() / 2, height),
+                        xytext=(0, 3 if height >= 0 else -13),
+                        textcoords="offset points",
+                        color='white', ha='center', va='bottom' if height >= 0 else 'top',
+                        fontweight='bold')
+
+        st.pyplot(fig)
+
+    with tab2:
+        col_a, col_b = st.columns([1, 2])
+        with col_a:
+            st.image("https://img.icons8.com/fluency/144/robot-2.png")
+        with col_b:
+            if llm_comment:
+                st.info(f"**AI Commentary:**\n\n{llm_comment}")
+            else:
+                st.warning("No signal commentary provided by the model.")
+            
+            with st.expander("Raw Signal Data"):
+                st.json(result)
+else:
+    # Landing state
+    st.info("👈 Configure features in the sidebar and click **Analyze Signal** to begin investigation.")
+    
+    # Placeholder layout to show potential
+    st.image("https://img.icons8.com/fluency/48/info.png", width=30)
+    st.write("Awaiting user input for cross-modular alpha synthesis.")
