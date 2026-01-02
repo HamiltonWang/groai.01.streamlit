@@ -205,7 +205,7 @@ if st.session_state.analysis_result:
     with c2:
         st.metric("History Match", f"{ret_history*100:.2f}%")
     with c3:
-        st.metric("Model Logic", f"{ret_model*100:.2f}%")
+        st.metric("AI Model", f"{ret_model*100:.2f}%")
 
     # Detailed Analysis
     tab1, tab2 = st.tabs(["📊 Performance Comparison", "🤖 AI Insight"])
@@ -215,7 +215,7 @@ if st.session_state.analysis_result:
         fig, ax = plt.subplots(figsize=(10, 4))
         plt.style.use('dark_background')
         
-        sources = ["LLM", "History", "Model"]
+        sources = ["LLM", "History Match", "AI Model"]
         values = [ret_llm * 100, ret_history * 100, ret_model * 100]
         colors = ["#4caf50" if v > 0 else "#f44336" for v in values] # Dynamic colors (Green for positive)
         
