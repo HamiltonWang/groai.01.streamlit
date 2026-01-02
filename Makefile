@@ -1,8 +1,8 @@
 # Makefile for GroAI.01 Streamlit Dashboard
 
 # Load .env file
-ifneq (,$(wildcard ./.env))
-    include .env
+ifneq (,$(wildcard ./.env.local))
+    include .env.local
     export
 endif
 
